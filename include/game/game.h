@@ -96,6 +96,14 @@ inline Vector3 Vector3Max(const Vector3 &v1, const Vector3 &v2)
     fmaxf(v1.z, v2.z)};
 }
 
+// Implementation of Vector3Distance
+inline float Vector3Distance(const Vector3& v1, const Vector3& v2)
+{
+  return sqrtf((v2.x - v1.x) * (v2.x - v1.x) +
+               (v2.y - v1.y) * (v2.y - v1.y) +
+               (v2.z - v1.z) * (v2.z - v1.z));
+}
+
 // Clamp value between 0 and 255
 static unsigned char ClampColorValue(int value)
 {

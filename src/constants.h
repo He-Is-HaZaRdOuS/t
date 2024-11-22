@@ -16,8 +16,8 @@ inline constexpr int kMaxRandomValue{255}; // Maximum random value in the cube
 inline constexpr int kTickrate{128};
 inline constexpr float kCameraPositionX{0.F};
 inline constexpr float kCameraPositionY{10.F};
-inline constexpr float kCameraPositionZ{-10.F};
-inline constexpr float kCameraFovY{45.F};
+inline constexpr float kCameraPositionZ{-1.F};
+inline constexpr float kCameraFovY{90.F};
 inline constexpr float kCubeSizeLength{2.F};
 inline constexpr int kGridSlices{10};
 inline constexpr float kCubeSpeed{1.2F};

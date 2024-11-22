@@ -99,10 +99,12 @@ int main()
         if (debugMenu)
         {
             Camera_Controls(camera);
+
             BeginTextureMode(gameTexture);
             ClearBackground(RAYWHITE);
             DrawRaycastTexture(raycastTexture); // Draw the texture with the raycast result
             EndTextureMode();
+
             BeginTextureMode(debugTexture);
             DrawTexturePro(gameTexture.texture,
                            source_rectangle,
@@ -112,7 +114,7 @@ int main()
                            RAYWHITE);
             EndTextureMode();
 
-            Game_DrawDebug(selected_cube_colour);
+            //Game_DrawDebug(selected_cube_colour);
 
             ImGui::Begin(
                 "Game",
