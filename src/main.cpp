@@ -23,19 +23,6 @@ void setup_camera(Camera3D &camera)
     camera.projection = CAMERA_PERSPECTIVE;
 }
 
-void update_cube(const float frame_time,
-                 const Vector3 &cube_velocity,
-                 Vector3 &cube_position)
-{
-    cube_position = Vector3{cube_position.x + frame_time * cube_velocity.x,
-                            cube_position.y + frame_time * cube_velocity.y,
-                            cube_position.z + frame_time * cube_velocity.z};
-    if (cube_position.z > constants::kCubePositionMaxZ)
-    {
-        cube_position.z = constants::kCubePositionMinZ;
-    }
-}
-
 int main()
 {
     double tickTimer{0.0};
@@ -75,6 +62,20 @@ int main()
     const Font font{LoadFont(ASSETS_PATH "ibm-plex-mono-v19-latin-500.ttf")};
     int selected_cube_colour{0};
 
+    std::vector<std::vector<std::vector<int>>> cube(constants::kCubeSize,
+                                                     std::vector<std::vector<int>>(constants::kCubeSize,
+                                                                                   std::vector<int>(constants::kCubeSize)));
+    GenerateRandomCubeData(cube);
+    Image raycastImage;       // Holds pixel data
+    Texture2D raycastTexture; // The texture that will be rendered
+
+    // Allocate memory for the image
+    raycastImage = GenImageColor(windowSize.x, windowSize.y, RAYWHITE); // Start with a blank white image
+
+    // Load this image into a texture
+    raycastTexture = LoadTextureFromImage(raycastImage);  // Convert image to texture
+
+
     while (!WindowShouldClose())
     {
         const float frame_time{GetFrameTime()};
@@ -89,6 +90,7 @@ int main()
         }
 
         keyQueue.push(GetKeyPressed());
+        RenderVolumeRaycastingToImage(cube, camera, windowSize.x, windowSize.y, raycastImage, raycastTexture);
 
         BeginDrawing();
         rlImGuiBegin();
@@ -96,15 +98,11 @@ int main()
 
         if (debugMenu)
         {
+            Camera_Controls(camera);
             BeginTextureMode(gameTexture);
             ClearBackground(RAYWHITE);
-            draw_scene(camera,
-                       cube_position,
-                       constants::kCubeColours[static_cast<size_t>(
-                           selected_cube_colour)],
-                       font);
+            DrawRaycastTexture(raycastTexture); // Draw the texture with the raycast result
             EndTextureMode();
-
             BeginTextureMode(debugTexture);
             DrawTexturePro(gameTexture.texture,
                            source_rectangle,
@@ -129,16 +127,12 @@ int main()
         else
         {
             ClearBackground(RAYWHITE);
-            draw_scene(camera,
-                       cube_position,
-                       constants::kCubeColours[static_cast<size_t>(
-                           selected_cube_colour)],
-                       font);
+            DrawRaycastTexture(raycastTexture); // Draw the texture with the raycast result
         }
+        DrawFPS(10, 10);
         rlImGuiEnd();
         EndDrawing();
 
-        update_cube(frame_time, cube_velocity, cube_position);
     }
     return 0;
 }

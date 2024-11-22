@@ -11,10 +11,12 @@ namespace constants
 inline const std::string kTitle{"Trying raylib with ImGui"};
 inline constexpr int kWindowWidth{1366};
 inline constexpr int kWindowHeight{768};
+inline constexpr int kCubeSize{16}; // Cube dimensions
+inline constexpr int kMaxRandomValue{255}; // Maximum random value in the cube
 inline constexpr int kTickrate{128};
 inline constexpr float kCameraPositionX{0.F};
 inline constexpr float kCameraPositionY{10.F};
-inline constexpr float kCameraPositionZ{10.F};
+inline constexpr float kCameraPositionZ{-10.F};
 inline constexpr float kCameraFovY{45.F};
 inline constexpr float kCubeSizeLength{2.F};
 inline constexpr int kGridSlices{10};
