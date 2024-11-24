@@ -98,7 +98,7 @@ int main()
 
         if (debugMenu)
         {
-            Camera_Controls(camera);
+            UpdateCamera(camera);
 
             BeginTextureMode(gameTexture);
             ClearBackground(RAYWHITE);
