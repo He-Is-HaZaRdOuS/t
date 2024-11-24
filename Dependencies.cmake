@@ -10,7 +10,7 @@ function(raylib_imgui_setup_dependencies)
     FetchContent_Declare(
         ImGui
         GIT_REPOSITORY https://github.com/ocornut/imgui
-        GIT_TAG cb16be3a3fc1f9cd146ae24d52b615f8a05fa93d) # v1.90.9
+        GIT_TAG f401021d5a5d56fe2304056c391e78f81c8d4b8f) # v1.91.5
     FetchContent_MakeAvailable(ImGui)
     FetchContent_GetProperties(ImGui SOURCE_DIR IMGUI_DIR)
 
@@ -34,8 +34,8 @@ function(raylib_imgui_setup_dependencies)
     )# 11.0.2
 
     message(STATUS "Include raylib")
-    cpmaddpackage("gh:raysan5/raylib#ae50bfa2cc569c0f8d5bc4315d39db64005b1b0"
-    )# v5.0
+    cpmaddpackage("gh:raysan5/raylib#c1ab645ca298a2801097931d1079b10ff7eb9df8"
+    )# v5.5
 
     message(STATUS "Include spdlog")
     #cpmaddpackage("gh:gabime/spdlog#7c02e204c92545f869e2f04edaab1f19fe8b19fd"
@@ -47,7 +47,7 @@ function(raylib_imgui_setup_dependencies)
     FetchContent_Declare(
         rlImGui
         GIT_REPOSITORY https://github.com/raylib-extras/rlImGui
-        GIT_TAG d765c1ef3d37cf939f88aaa272a59a2713d654c9)
+        GIT_TAG 583d4fea67e67d431319974f0625f680d3840dfb)
     FetchContent_MakeAvailable(rlImGui)
     FetchContent_GetProperties(rlImGui SOURCE_DIR RLIMGUI_DIR)
     add_library(rlimgui STATIC ${rlimgui_SOURCE_DIR}/rlImGui.cpp)
