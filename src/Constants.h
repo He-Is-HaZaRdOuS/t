@@ -1,19 +1,20 @@
-#ifndef SRC_CONSTANTS_H
-#define SRC_CONSTANTS_H
+#pragma once
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
 
 #include <raylib.h>
 
 #include <array>
 #include <string>
 
-namespace constants
+namespace Constants
 {
-inline const std::string kTitle{"Trying raylib with ImGui"};
+inline const std::string kTitle{"Direct Volume Rendering : Raylib + ImGui"};
 inline constexpr int kWindowWidth{1366};
 inline constexpr int kWindowHeight{768};
 inline constexpr int kCubeSize{16}; // Cube dimensions
 inline constexpr int kMaxRandomValue{255}; // Maximum random value in the cube
-inline constexpr int kTickrate{128};
+inline constexpr int kTickRate{128};
 inline constexpr float kCameraPositionX{0.F};
 inline constexpr float kCameraPositionY{10.F};
 inline constexpr float kCameraPositionZ{-1.F};
