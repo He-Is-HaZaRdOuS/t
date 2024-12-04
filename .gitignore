@@ -97,6 +97,7 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+cmake-build-*
 
 # Files built by Visual Studio
 *_i.c
@@ -149,3 +150,4 @@ ipch/
 
 compile_commands.json
 .DS_Store
+.idea
