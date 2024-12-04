@@ -48,18 +48,19 @@ namespace Game
         // Helper function to calculate ray direction from screen coordinates
         Vector3 ScreenToRayDirection(int x, int y, const Camera &camera, int screenWidth, int screenHeight)
         {
+            // "normalize" x and y: [0, screenWidth or screenHeight] -> [-1,1]
+            float normX = (((float)x / (float)screenWidth) - 0.5f) * 2.0f;
+            float normY = (((float)y / (float)screenHeight) - 0.5f) * 2.0f;
             float aspectRatio = static_cast<float>(screenWidth) / static_cast<float>(screenHeight);
 
-            // FOV adjustment using tangent
-            float fovAdjustment = tanf(camera.fovy * DEG2RAD / 2.0f);
-            float px = ((2.0f * x) / screenWidth - 1.0f) * aspectRatio * fovAdjustment;
-            float py = (1.0f - (2.0f * y) / screenHeight) * fovAdjustment;
+            Vector3 cameraDirection = Vector3Normalize(camera.target - camera.position);
+            Vector3 horizontal = Vector3CrossProduct(camera.up, cameraDirection);
 
-            // Ray direction calculation
-            Vector3 horizontal = Vector3CrossProduct(camera.up, Vector3Normalize(camera.target - camera.position));
-            Vector3 rayDirection = Vector3Normalize(camera.target - camera.position + camera.up * py + horizontal * px);
+            // distance between camera & perspective plane = cot(fov / 2)
+            float d = 1.0f / tanf((camera.fovy * DEG2RAD) * 0.5f);
+            Vector3 rayDirection = cameraDirection * d + camera.up * (-normY) + horizontal * (normX * aspectRatio);
 
-            return rayDirection;
+            return Vector3Normalize(rayDirection);
         }
 
         // Helper function to trace a ray through the 3D volume
@@ -144,11 +145,27 @@ namespace Game
                 }
             }
         }
+
+        // Function to generate 3D cube data with checker pattern
+        void GenerateCheckerCubeData()
+        {
+            for (int x = 0; x < Constants::kCubeSize; ++x)
+            {
+                for (int y = 0; y < Constants::kCubeSize; ++y)
+                {
+                    for (int z = 0; z < Constants::kCubeSize; ++z)
+                    {
+                        cube[x][y][z] = 2 * ((x+y+z) % 2 == 0);
+                    }
+                }
+            }
+        }
     } // Anonymous namespace
 
     inline void Initialize(Vector2 windowSize)
     {
-        GenerateRandomCubeData();
+        //GenerateRandomCubeData();
+        GenerateCheckerCubeData();
         raycastImage = GenImageColor(windowSize.x, windowSize.y, RAYWHITE); // Start with a blank white image
         raycastTexture = LoadTextureFromImage(raycastImage);  // Convert image to texture
     }
