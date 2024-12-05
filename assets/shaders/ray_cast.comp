@@ -1,0 +1,130 @@
+#version 430
+
+struct Camera3D {
+    vec3 position;       // Camera position
+    vec3 target;         // Camera target it looks-at
+    vec3 up;             // Camera up vector (rotation over its axis)
+    float fovy;             // Camera field-of-view aperture in Y (degrees) in perspective
+    int projection;         // Camera projection: CAMERA_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
+};
+
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+};
+
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout (std430, binding = 1) readonly restrict buffer dvrLayout {
+    float dvrBuffer[];
+};
+
+layout (std430, binding = 2) writeonly restrict buffer dvrLayout2 {
+    float dvrBufferDest[];
+};
+
+layout (location = 3) uniform ivec2 resolution;
+
+layout (std430, binding = 4) readonly restrict buffer volumeData {
+    uint volumeBuffer[];
+};
+layout (location = 5) uniform int volumeSize;
+
+layout (location = 6) uniform float cameraData[];
+
+
+vec3 ScreenToRayDirection(Camera3D camera, uint x, uint y) {
+    float normX = ((float(x) / float(resolution.x)) - 0.5f) * 2.0f;
+    float normY = ((float(y) / float(resolution.y)) - 0.5f) * 2.0f;
+    float aspectRatio = float(resolution.x) / float(resolution.y);
+
+    vec3 cameraDirection = normalize(camera.target - camera.position);
+    vec3 horizontal = cross(camera.up, cameraDirection);
+
+    // distance between camera & perspective plane = cot(fov / 2)
+    float d = 1.0f / tan((camera.fovy * 3.14159265358979323846f / 180.0f) * 0.5f);
+    vec3 rayDirection = cameraDirection * d + camera.up * (-normY) + horizontal * (normX * aspectRatio);
+
+    return normalize(rayDirection);
+}
+
+float RayCastThroughVolume(Ray r)
+{
+    const float cellSize = 0.125f;
+
+    // Define cube bounds (assuming cube is centered at origin)
+    const float cubeMin = -volumeSize * 0.5f * cellSize;
+    const float cubeMax = volumeSize * 0.5f * cellSize;
+
+    // Ray-box intersection
+    float INFINITY = 3.40282347e+38F;
+    vec3 invRayDir = vec3(
+    (r.direction.x != 0.0f) ? 1.0f / r.direction.x : INFINITY,
+    (r.direction.y != 0.0f) ? 1.0f / r.direction.y : INFINITY,
+    (r.direction.z != 0.0f) ? 1.0f / r.direction.z : INFINITY
+    );
+
+    vec3 tMin = (vec3(cubeMin, cubeMin, cubeMin) - r.origin) * invRayDir;
+    vec3 tMax = (vec3(cubeMax, cubeMax, cubeMax) - r.origin) * invRayDir;
+
+    vec3 tEnter = vec3(min(tMin.x, tMax.x), min(tMin.y, tMax.y), min(tMin.z, tMax.z));
+    vec3 tExit = vec3(max(tMin.x, tMax.x), max(tMin.y, tMax.y), max(tMin.z, tMax.z));
+
+    float tStart = max(tEnter.x, max(tEnter.y, tEnter.z));
+    float tEnd = min(tExit.x, min(tExit.y, tExit.z));
+
+    if (tStart > tEnd || tEnd < 0.0f)
+    {
+        return 0.0f; // No intersection
+    }
+
+    // Ray traversal through the volume
+    vec3 currentPosition = r.origin + r.direction * tStart;
+    float stepSize = cellSize / 2.0f; // Step size for ray traversal
+    float accumulatedAlpha = 0.0f;
+
+    while (tStart < tEnd)
+    {
+        // Map world position to volume indices
+        int x = int((currentPosition.x - cubeMin) / cellSize);
+        int y = int((currentPosition.y - cubeMin) / cellSize);
+        int z = int((currentPosition.z - cubeMin) / cellSize);
+
+        if (x >= 0 && x < volumeSize && y >= 0 && y < volumeSize && z >= 0 && z < volumeSize)
+        {
+            // Get voxel value and map it to a color (grayscale)
+            uint value = volumeBuffer[(x * volumeSize * volumeSize) + (y * volumeSize) + z];
+            float voxelAlpha = float(value) / 256.0f;
+
+            // Accumulate color (simple maximum intensity projection)
+            accumulatedAlpha = accumulatedAlpha + voxelAlpha;
+        }
+
+        // Advance ray position
+        currentPosition += r.direction * stepSize;
+        tStart += stepSize;
+    }
+
+    return accumulatedAlpha;
+}
+
+void main()
+{
+    ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+
+    Camera3D camera;
+    camera.position = vec3(cameraData[0], cameraData[1], cameraData[2]);
+    camera.target = vec3(cameraData[3], cameraData[4], cameraData[5]);
+    camera.up = vec3(cameraData[6], cameraData[7], cameraData[8]);
+    camera.fovy = cameraData[9];
+    camera.projection = int(cameraData[10]);
+
+    vec3 rayDirection = ScreenToRayDirection(camera, id.x, id.y);
+    Ray r;
+    r.origin = camera.position;
+    r.direction = rayDirection;
+    float alpha = RayCastThroughVolume(r);
+
+    dvrBufferDest[(id.x) + resolution.x * (id.y)] = alpha;
+}

@@ -22,6 +22,7 @@ option(RUN_TESTS "Enable tests" ON)
 include(coverage)
 add_coverage_target("Catch_tests/*")
 
+SET(GRAPHICS "GRAPHICS_API_OPENGL_43")
 include(Dependencies.cmake)
 raylib_imgui_setup_dependencies()
 

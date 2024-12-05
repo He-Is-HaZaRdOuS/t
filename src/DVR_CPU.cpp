@@ -1,7 +1,6 @@
 #include "Application/Application.h"
 
-
-int main()
+int cpu_main()
 {
     Application::Initialize();
     CameraUtils::Initialize();
