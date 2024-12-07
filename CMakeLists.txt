@@ -30,20 +30,24 @@ include(cmake/StaticAnalysers.cmake)
 
 # Automatically collect source files
 file(GLOB_RECURSE RAYLIB_IMGUI_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/**.cpp")
-#file(GLOB_RECURSE DICOM_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/DICOMParser/*.cxx")
 
-add_executable(RaylibImGuiApp ${RAYLIB_IMGUI_SOURCES} ${DICOM_SOURCES})
+add_executable(RaylibImGuiApp ${RAYLIB_IMGUI_SOURCES})
 
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
     target_link_libraries(RaylibImGuiApp PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
+# TODO: use CPM
+add_subdirectory(vendor/DICOMParser)
+target_include_directories(RaylibImGuiApp PUBLIC vendor/DICOMParser)
+
 target_link_libraries(
         RaylibImGuiApp
         PUBLIC dbg_macro
         fmt
         imgui
+        ITKDICOMParser
         raylib
         rlimgui
         spdlog::spdlog_header_only
