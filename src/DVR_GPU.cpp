@@ -1,3 +1,5 @@
+#include "DICOMAppHelper.h"
+#include "DICOMParser.h"
 #include "raylib.h"
 #include "rlImGui.h"
 #include "rlgl.h"
@@ -5,25 +7,70 @@
 #include <algorithm>
 #include <cmath>
 #include <imgui.h>
+#include <iostream>
+#include <stdint.h>
 
 #define WIN_WIDTH 1366
 #define WIN_HEIGHT 768
 
-#define CUBE_SIZE 256
+#define CUBE_SIZE 512
 
-Camera3D camera = {.position = {0, 0, -30},
+Camera3D camera = {.position = {90, 0, 0},
                    .target = {0, 0, 0},
                    .up = {0, 1, 0},
-                   .fovy = 60,
+                   .fovy = 45,
                    .projection = CAMERA_PERSPECTIVE};
+float brightness = 1.0f;
 
 void drawDebugMenu();
 
-int main(void)
+void loadVolumeData(unsigned char *cube)
 {
-    auto *cube = new unsigned int[CUBE_SIZE * CUBE_SIZE * CUBE_SIZE];
+    //uint8_t ***volume = (uint8_t ***)(&cube[0]);
+    DICOMAppHelper appHelper;
+    DICOMParser parser;
+
+    const std::string BaseFileName = ASSETS_PATH "dicom/PATIENT_DICOM/image_";
+    int fileCount = 0;
+    int maxFileCount = 124;
+
+    while (fileCount < maxFileCount)
+    {
+        parser.ClearAllDICOMTagCallbacks();
+        parser.OpenFile(BaseFileName + std::to_string(fileCount));
+        appHelper.Clear();
+        appHelper.RegisterCallbacks(&parser);
+        appHelper.RegisterPixelDataCallback(&parser);
+
+        parser.ReadHeader();
+
+        void *imgData = nullptr;
+        DICOMParser::VRTypes dataType;
+        unsigned long imageDataLength = 0;
+
+        appHelper.GetImageData(imgData, dataType, imageDataLength);
+        auto numPixels = imageDataLength / 2;
+
+        for (size_t i = 0; i < numPixels && i < CUBE_SIZE * CUBE_SIZE; ++i)
+        {
+            int16_t pixelVal = ((int16_t *)imgData)[i];
+            if (pixelVal > 0)
+            {
+                uint8_t compressed = (uint8_t)((float(pixelVal) / float(INT16_MAX)) * UINT8_MAX);
+                cube[fileCount * CUBE_SIZE * CUBE_SIZE + i] = compressed;
+                cube[(fileCount + 1) * CUBE_SIZE * CUBE_SIZE + i] = compressed;
+            }
+        }
+        fileCount += 2;
+    }
+}
+
+int main()
+{
+    auto *cube = new unsigned char[CUBE_SIZE * CUBE_SIZE * CUBE_SIZE];
     for (int i = 0; i < CUBE_SIZE * CUBE_SIZE * CUBE_SIZE; ++i)
-        cube[i] = rand() < RAND_MAX / 8;
+        cube[i] = 0;
+    loadVolumeData(cube);
 
     InitWindow(WIN_WIDTH, WIN_HEIGHT, "DVR_GPU");
     rlImGuiSetup(true);
@@ -40,6 +87,7 @@ int main(void)
     // render shader (fragment)
     Shader dvrRenderShader = LoadShader(NULL, ASSETS_PATH "shaders/render.glsl");
     int resUniformLoc = GetShaderLocation(dvrRenderShader, "resolution");
+    int brightUniformLoc = GetShaderLocation(dvrRenderShader, "brightness");
 
     // Load shader storage buffer object (SSBO), id returned
     constexpr auto bufferSize = WIN_WIDTH * WIN_HEIGHT * sizeof(int);
@@ -47,7 +95,7 @@ int main(void)
     auto ssboB = rlLoadShaderBuffer(bufferSize, NULL, RL_DYNAMIC_COPY);
 
     // upload volume data
-    constexpr auto volumeBufferSize = CUBE_SIZE * CUBE_SIZE * CUBE_SIZE * sizeof(unsigned int);
+    constexpr auto volumeBufferSize = CUBE_SIZE * CUBE_SIZE * CUBE_SIZE * sizeof(uint8_t);
     rlEnableShader(dvrComputeProgram);
     auto volumeDataSSBO = rlLoadShaderBuffer(volumeBufferSize, cube, RL_STATIC_READ);
     rlBindShaderBuffer(volumeDataSSBO, 4);
@@ -84,6 +132,7 @@ int main(void)
 
         rlBindShaderBuffer(ssboA, 1);
         SetShaderValue(dvrRenderShader, resUniformLoc, &resolution, SHADER_UNIFORM_VEC2);
+        SetShaderValue(dvrRenderShader, brightUniformLoc, &brightness, SHADER_UNIFORM_FLOAT);
 
         //----------------------------------------------------------------------------------
         // Draw
@@ -210,6 +259,20 @@ void drawDebugMenu()
         camera.fovy = std::clamp(camera.fovy, 10.0f, 179.9f);
     }
     ImGui::PopID();
+
+    // Image Brightness Control
+    ImGui::Text("Brightness:");
+    ImGui::PushID("Brightness");
+    if (ImGui::SliderFloat("Brightness", &brightness, 0.0f, 10.0f, "%.1f"))
+    {
+        // Optional: Logic when FOV changes via slider
+    }
+    if (ImGui::InputFloat("Manual Brightness", &brightness, 0.0f, 0.0f, "%.1f"))
+    {
+        brightness = std::clamp(brightness, 0.0f, 10.0f);
+    }
+    ImGui::PopID();
+
     ImGui::End();
     rlImGuiEnd();
 }
