@@ -1,4 +1,5 @@
 #version 430
+#extension GL_NV_gpu_shader5 : enable
 
 struct Camera3D {
     vec3 position;       // Camera position
@@ -26,7 +27,7 @@ layout (std430, binding = 2) writeonly restrict buffer dvrLayout2 {
 layout (location = 3) uniform ivec2 resolution;
 
 layout (std430, binding = 4) readonly restrict buffer volumeData {
-    uint volumeBuffer[];
+    uint8_t volumeBuffer[];
 };
 layout (location = 5) uniform int volumeSize;
 
@@ -93,8 +94,8 @@ float RayCastThroughVolume(Ray r)
         if (x >= 0 && x < volumeSize && y >= 0 && y < volumeSize && z >= 0 && z < volumeSize)
         {
             // Get voxel value and map it to a color (grayscale)
-            uint value = volumeBuffer[(x * volumeSize * volumeSize) + (y * volumeSize) + z];
-            float voxelAlpha = float(value) / 256.0f;
+            uint8_t value = volumeBuffer[(x * volumeSize * volumeSize) + (y * volumeSize) + z];
+            float voxelAlpha = float(value) / 255.0f;
 
             // Accumulate color (simple maximum intensity projection)
             accumulatedAlpha = accumulatedAlpha + voxelAlpha;
