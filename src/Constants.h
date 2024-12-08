@@ -12,13 +12,13 @@ namespace Constants
 inline const std::string kTitle{"Direct Volume Rendering : Raylib + ImGui"};
 inline constexpr int kWindowWidth{1366};
 inline constexpr int kWindowHeight{768};
-inline constexpr int kCubeSize{16}; // Cube dimensions
+inline constexpr int kCubeSize{32}; // Cube dimensions
 inline constexpr int kMaxRandomValue{255}; // Maximum random value in the cube
 inline constexpr int kTickRate{128};
 inline constexpr float kCameraPositionX{0.F};
 inline constexpr float kCameraPositionY{0.F};
 inline constexpr float kCameraPositionZ{-30.F};
-inline constexpr float kCameraFovY{60.F};
+inline constexpr float kCameraFovY{120.F};
 inline constexpr float kCubeSizeLength{2.F};
 inline constexpr int kGridSlices{10};
 inline constexpr float kCubeSpeed{1.2F};
@@ -49,6 +49,7 @@ inline constexpr int kTextPositionY{40};
 inline constexpr int kTextFontSize{24};
 inline constexpr int kFPSPositionX{10};
 inline constexpr int kFPSPositionY{10};
+inline constexpr int kOMPThreads{8};
 } // namespace constants
 
 #endif

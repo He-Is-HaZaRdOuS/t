@@ -3,6 +3,8 @@
 #define GAME_H
 
 #include "Constants.h"
+#include "DICOMAppHelper.h"
+#include "DICOMParser.h"
 
 #include <fmt/format.h>
 #include <imgui.h>
@@ -98,6 +100,7 @@ namespace Game
             // Ray traversal through the volume
             Vector3 currentPosition = rayOrigin + rayDir * tStart;
             float stepSize = 0.1f; // Step size for ray traversal
+            float maxAlpha = 0.0f;
             Color accumulatedColor = BLACK;
 
             while (tStart < tEnd)
@@ -111,13 +114,19 @@ namespace Game
                 {
                     // Get voxel value and map it to a color (grayscale)
                     int value = volume[x][y][z];
+                    float voxelAlpha = float(value) / 255.0f;
                     Color voxelColor = { static_cast<unsigned char>(value),
                                          static_cast<unsigned char>(value),
                                          static_cast<unsigned char>(value),
-                                         255 };
+                                         static_cast<unsigned char>(voxelAlpha) };
 
                     // Accumulate color (simple maximum intensity projection)
                     accumulatedColor = ColorAdd(accumulatedColor, voxelColor);
+
+                    // maximum intensity projection
+                    if (voxelAlpha > maxAlpha) {
+                        maxAlpha = voxelAlpha;
+                    }
                 }
 
                 // Advance ray position
@@ -126,6 +135,7 @@ namespace Game
             }
 
             return accumulatedColor;
+            return Color{1, 1, 1, (unsigned char)maxAlpha};
         }
 
         // Function to generate random 3D cube data
@@ -160,12 +170,76 @@ namespace Game
                 }
             }
         }
+
+        void loadVolumeData(std::vector<std::vector<std::vector<int>>>& cube)
+        {
+            DICOMAppHelper appHelper;
+            DICOMParser parser;
+
+            const std::string BaseFileName = ASSETS_PATH "dicom/PATIENT_DICOM/image_";
+            int fileCount = 0;
+            int maxFileCount = 124;
+
+            int kCubeSize = Constants::kCubeSize;
+
+            while (fileCount < maxFileCount)
+            {
+                parser.ClearAllDICOMTagCallbacks();
+                parser.OpenFile(BaseFileName + std::to_string(fileCount));
+                appHelper.Clear();
+                appHelper.RegisterCallbacks(&parser);
+                appHelper.RegisterPixelDataCallback(&parser);
+
+                parser.ReadHeader();
+
+                void* imgData = nullptr;
+                DICOMParser::VRTypes dataType;
+                unsigned long imageDataLength = 0;
+
+                appHelper.GetImageData(imgData, dataType, imageDataLength);
+                auto numPixels = imageDataLength / 2;
+
+                for (size_t i = 0; i < kCubeSize; ++i)
+                {
+                    for (size_t j = 0; j < kCubeSize; ++j)
+                    {
+                        int x = (i / kCubeSize) * 512;
+                        int y = (j / kCubeSize) * 512;
+                        int16_t pixelVal = ((int16_t*)imgData)[x + y * 512];
+                        if (pixelVal > 0)
+                        {
+                            uint8_t compressed = static_cast<uint8_t>((float(pixelVal) / float(INT16_MAX)) * UINT8_MAX);
+
+                            // Assign compressed values to the corresponding slices
+                            for (int slice = 0; slice < 4; ++slice)
+                            {
+                                if (fileCount + slice < maxFileCount) {
+                                    cube[fileCount + slice][i][j] = compressed;
+                                }
+                            }
+                        }
+                    }
+                }
+                fileCount += 4;
+            }
+        }
+
     } // Anonymous namespace
 
     inline void Initialize(Vector2 windowSize)
     {
         //GenerateRandomCubeData();
         GenerateCheckerCubeData();
+
+        // Initialize the cube with some values
+            // for (int x = 0; x < Constants::kCubeSize; ++x) {
+            //     for (int y = 0; y < Constants::kCubeSize; ++y) {
+            //         for (int z = 0; z < Constants::kCubeSize; ++z) {
+            //             cube[x][y][z] = x * Constants::kCubeSize * Constants::kCubeSize + y * Constants::kCubeSize + z;
+            //         }
+            //     }
+            // }
+            // loadVolumeData(cube);
         raycastImage = GenImageColor(windowSize.x, windowSize.y, RAYWHITE); // Start with a blank white image
         raycastTexture = LoadTextureFromImage(raycastImage);  // Convert image to texture
     }
@@ -183,7 +257,7 @@ namespace Game
         Color* pixels = reinterpret_cast<Color*>(raycastImage.data);
 
         // Parallelize raycasting for the whole grid of pixels
-    #pragma omp parallel for schedule(guided)
+    #pragma omp parallel for num_threads(Constants::kOMPThreads) schedule(guided)
         for (int y = 0; y < screenHeight; ++y)
         {
             for (int x = 0; x < screenWidth; ++x)
