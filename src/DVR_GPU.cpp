@@ -59,9 +59,11 @@ void loadVolumeData(unsigned char *cube)
                 uint8_t compressed = (uint8_t)((float(pixelVal) / float(INT16_MAX)) * UINT8_MAX);
                 cube[fileCount * CUBE_SIZE * CUBE_SIZE + i] = compressed;
                 cube[(fileCount + 1) * CUBE_SIZE * CUBE_SIZE + i] = compressed;
+                cube[(fileCount + 2) * CUBE_SIZE * CUBE_SIZE + i] = compressed;
+                cube[(fileCount + 3) * CUBE_SIZE * CUBE_SIZE + i] = compressed;
             }
         }
-        fileCount += 2;
+        fileCount += 4;
     }
 }
 
