@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(RaylibImGui LANGUAGES C CXX)
+project(DIRECT_VOLUME_RENDERING LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 17)
@@ -28,22 +28,29 @@ raylib_imgui_setup_dependencies()
 
 include(cmake/StaticAnalysers.cmake)
 
-# Automatically collect source files
-file(GLOB_RECURSE RAYLIB_IMGUI_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/**.cpp")
+file(GLOB CPU CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/DVR_CPU.cpp")
+file(GLOB GPU CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/DVR_GPU.cpp")
 
-add_executable(RaylibImGuiApp ${RAYLIB_IMGUI_SOURCES})
+#file(GLOB CONSTANTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/Constants.h")
+#file(GLOB APPLICATION CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/Application/Application.h")
+#file(GLOB CAMERA CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/Camera/Camera.h")
+#file(GLOB GAME CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/Game/Game.h")
+
+add_executable(DVR_CPU ${CPU})
+add_executable(DVR_GPU ${GPU})
 
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
-    target_link_libraries(RaylibImGuiApp PUBLIC OpenMP::OpenMP_CXX)
+    target_link_libraries(DVR_CPU PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
 # TODO: use CPM
 add_subdirectory(vendor/DICOMParser)
-target_include_directories(RaylibImGuiApp PUBLIC vendor/DICOMParser)
+target_include_directories(DVR_CPU PUBLIC vendor/DICOMParser)
+target_include_directories(DVR_GPU PUBLIC vendor/DICOMParser)
 
 target_link_libraries(
-        RaylibImGuiApp
+        DVR_CPU
         PUBLIC dbg_macro
         fmt
         imgui
@@ -53,18 +60,36 @@ target_link_libraries(
         spdlog::spdlog_header_only
         raylib_imgui_compiler_flags)
 
-target_compile_definitions(RaylibImGuiApp PRIVATE SPDLOG_FMT_EXTERNAL)
-target_compile_definitions(
-        RaylibImGuiApp PUBLIC ASSETS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/")
-target_include_directories(RaylibImGuiApp PUBLIC "${PROJECT_SOURCE_DIR}/src")
+target_link_libraries(
+        DVR_GPU
+        PUBLIC dbg_macro
+        fmt
+        imgui
+        ITKDICOMParser
+        raylib
+        rlimgui
+        spdlog::spdlog_header_only
+        raylib_imgui_compiler_flags)
+
+target_compile_definitions(DVR_CPU PRIVATE SPDLOG_FMT_EXTERNAL)
+target_compile_definitions(DVR_GPU PRIVATE SPDLOG_FMT_EXTERNAL)
+
+target_compile_definitions(DVR_CPU PUBLIC ASSETS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/")
+target_compile_definitions(DVR_GPU PUBLIC ASSETS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/")
+
+target_include_directories(DVR_CPU PUBLIC "${PROJECT_SOURCE_DIR}/src")
 
 if(APPLE)
-    target_link_libraries(RaylibImGuiApp PUBLIC "-framework IOKit")
-    target_link_libraries(RaylibImGuiApp PUBLIC "-framework Cocoa")
-    target_link_libraries(RaylibImGuiApp PUBLIC "-framework OpenGL")
+    target_link_libraries(DVR_CPU PUBLIC "-framework IOKit")
+    target_link_libraries(DVR_CPU PUBLIC "-framework Cocoa")
+    target_link_libraries(DVR_CPU PUBLIC "-framework OpenGL")
+
+    target_link_libraries(DVR_GPU PUBLIC "-framework IOKit")
+    target_link_libraries(DVR_GPU PUBLIC "-framework Cocoa")
+    target_link_libraries(DVR_GPU PUBLIC "-framework OpenGL")
 endif()
 
-target_include_directories(RaylibImGuiApp PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+target_include_directories(DVR_CPU PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 
 option(RUN_UNIT_TESTS "Run Catch2 unit tests" ON)
 if(RUN_UNIT_TESTS)
@@ -73,4 +98,4 @@ if(RUN_UNIT_TESTS)
 endif()
 
 # Make this project the startup project
-set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT "RaylibImGuiApp")
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT "DIRECT VOLUME RENDERING")
