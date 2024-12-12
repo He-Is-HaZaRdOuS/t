@@ -94,7 +94,7 @@ float RayCastThroughVolume(Ray r)
         if (x >= 0 && x < volumeSize && y >= 0 && y < volumeSize && z >= 0 && z < volumeSize)
         {
             // Get voxel value and map it to a color (grayscale)
-            uint8_t value = volumeBuffer[(x * volumeSize * volumeSize) + (y * volumeSize) + z];
+            uint8_t value = volumeBuffer[(y * volumeSize * volumeSize) + (x * volumeSize) + z];
             float voxelAlpha = float(value) / 255.0f;
 
             // maximum intensity projection

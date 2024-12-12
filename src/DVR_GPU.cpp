@@ -1,6 +1,7 @@
 #include "DICOMAppHelper.h"
 #include "DICOMParser.h"
 #include "raylib.h"
+#include "raymath.h"
 #include "rlImGui.h"
 #include "rlgl.h"
 
@@ -15,18 +16,18 @@
 
 #define CUBE_SIZE 512
 
-Camera3D camera = {.position = {90, 0, 0},
+Camera3D camera = {.position = {0, 0, -128},
                    .target = {0, 0, 0},
                    .up = {0, 1, 0},
                    .fovy = 45,
                    .projection = CAMERA_PERSPECTIVE};
+float camRotateX = 180;
 float brightness = 1.0f;
 
 void drawDebugMenu();
 
-void loadVolumeData(unsigned char *cube)
+void loadVolumeData(uint8_t *cube)
 {
-    //uint8_t ***volume = (uint8_t ***)(&cube[0]);
     DICOMAppHelper appHelper;
     DICOMParser parser;
 
@@ -53,25 +54,36 @@ void loadVolumeData(unsigned char *cube)
 
         for (size_t i = 0; i < numPixels && i < CUBE_SIZE * CUBE_SIZE; ++i)
         {
+            // -1024 <= pixelVal <= 1023
             int16_t pixelVal = ((int16_t *)imgData)[i];
-            if (pixelVal > 0)
+            if (pixelVal >= -128)
             {
-                uint8_t compressed = (uint8_t)((float(pixelVal) / float(INT16_MAX)) * UINT8_MAX);
-                cube[fileCount * CUBE_SIZE * CUBE_SIZE + i] = compressed;
-                cube[(fileCount + 1) * CUBE_SIZE * CUBE_SIZE + i] = compressed;
-                cube[(fileCount + 2) * CUBE_SIZE * CUBE_SIZE + i] = compressed;
-                cube[(fileCount + 3) * CUBE_SIZE * CUBE_SIZE + i] = compressed;
+                uint8_t compressed = (uint8_t)((float(pixelVal + 128) / (128 + 1023)) * UINT8_MAX);
+                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = compressed;
             }
         }
-        fileCount += 4;
+        fileCount++;
+    }
+    // generate filler slices by LERPing actual slices
+    const auto layerSize = CUBE_SIZE * CUBE_SIZE;
+    for (int i = 0; (i + 4) <= (CUBE_SIZE - 1); i += 4)
+    {
+        for (int p = 0; p < layerSize; ++p)
+        {
+            cube[(i + 1) * layerSize + p] =
+                (cube[i * layerSize + p] * 3 + cube[(i + 4) * layerSize + p] * 1) / 4;
+            cube[(i + 2) * layerSize + p] =
+                (cube[i * layerSize + p] * 2 + cube[(i + 4) * layerSize + p] * 2) / 4;
+            cube[(i + 3) * layerSize + p] =
+                (cube[i * layerSize + p] * 1 + cube[(i + 4) * layerSize + p] * 3) / 4;
+        }
     }
 }
 
 int main()
 {
-    auto *cube = new unsigned char[CUBE_SIZE * CUBE_SIZE * CUBE_SIZE];
-    for (int i = 0; i < CUBE_SIZE * CUBE_SIZE * CUBE_SIZE; ++i)
-        cube[i] = 0;
+    // 128 mb
+    auto *cube = new uint8_t[CUBE_SIZE * CUBE_SIZE * CUBE_SIZE];
     loadVolumeData(cube);
 
     InitWindow(WIN_WIDTH, WIN_HEIGHT, "DVR_GPU");
@@ -178,98 +190,31 @@ void drawDebugMenu()
     ImGui::Begin("Camera Controls");
 
     // Camera Position Controls
-    ImGui::Text("Camera Position:");
+    ImGui::Text("Camera Controls:");
 
-    ImGui::PushID("CameraPosX");
-    if (ImGui::DragFloat("X", &camera.position.x, 0.1f, -100.0f, 100.0f, "%.2f"))
+    ImGui::PushID("Controls");
+    if (ImGui::DragFloat("Rotation", &camRotateX, 2.0f, -360.0f, 360.0f, "%.2f"))
     {
-        // Optional: Logic when X position changes via slider
+        camRotateX = std::clamp(camRotateX, -360.0f, 360.0f);
     }
-    if (ImGui::InputFloat("Manual X", &camera.position.x, 0.0f, 0.0f, "%.2f"))
+    if (ImGui::DragFloat("FOV", &camera.fovy, 1.0f, 10.0f, 150.0f, "%.1f"))
     {
-        camera.position.x = std::clamp(camera.position.x, -100.0f, 100.0f);
+        camera.fovy = std::clamp(camera.fovy, 10.0f, 150.0f);
     }
     ImGui::PopID();
 
-    ImGui::PushID("CameraPosY");
-    if (ImGui::DragFloat("Y", &camera.position.y, 0.1f, -100.0f, 100.0f, "%.2f"))
-    {
-        // Optional: Logic when Y position changes via slider
-    }
-    if (ImGui::InputFloat("Manual Y", &camera.position.y, 0.0f, 0.0f, "%.2f"))
-    {
-        camera.position.y = std::clamp(camera.position.y, -100.0f, 100.0f);
-    }
-    ImGui::PopID();
+    camera.position =
+        camera.target +
+        Vector3Normalize(Vector3{cosf(camRotateX * DEG2RAD), 0, sinf(camRotateX * DEG2RAD)}) * 128;
 
-    ImGui::PushID("CameraPosZ");
-    if (ImGui::DragFloat("Z", &camera.position.z, 0.1f, -100.0f, 100.0f, "%.2f"))
-    {
-        // Optional: Logic when Z position changes via slider
-    }
-    if (ImGui::InputFloat("Manual Z", &camera.position.z, 0.0f, 0.0f, "%.2f"))
-    {
-        camera.position.z = std::clamp(camera.position.z, -100.0f, 100.0f);
-    }
-    ImGui::PopID();
-
-    // Camera Target Controls
-    ImGui::Text("Camera Target:");
-
-    ImGui::PushID("CameraTargetX");
-    if (ImGui::SliderFloat("Target X", &camera.target.x, -180.0f, 180.0f, "%.2f"))
-    {
-        // Optional: Logic when X target changes via slider
-    }
-    if (ImGui::InputFloat("Manual X", &camera.target.x, 0.0f, 0.0f, "%.2f"))
-    {
-        camera.target.x = std::clamp(camera.target.x, -180.0f, 180.0f);
-    }
-    ImGui::PopID();
-
-    ImGui::PushID("CameraTargetY");
-    if (ImGui::SliderFloat("Target Y", &camera.target.y, -180.0f, 180.0f, "%.2f"))
-    {
-        // Optional: Logic when Y target changes via slider
-    }
-    if (ImGui::InputFloat("Manual Y", &camera.target.y, 0.0f, 0.0f, "%.2f"))
-    {
-        camera.target.y = std::clamp(camera.target.y, -180.0f, 180.0f);
-    }
-    ImGui::PopID();
-
-    ImGui::PushID("CameraTargetZ");
-    if (ImGui::SliderFloat("Target Z", &camera.target.z, -180.0f, 180.0f, "%.2f"))
-    {
-        // Optional: Logic when Z target changes via slider
-    }
-    if (ImGui::InputFloat("Manual Z", &camera.target.z, 0.0f, 0.0f, "%.2f"))
-    {
-        camera.target.z = std::clamp(camera.target.z, -180.0f, 180.0f);
-    }
-    ImGui::PopID();
-
-    // Camera FOV Control
-    ImGui::Text("Field of View:");
-    ImGui::PushID("CameraFOV");
-    if (ImGui::SliderFloat("FOV", &camera.fovy, 10.0f, 179.9f, "%.1f"))
-    {
-        // Optional: Logic when FOV changes via slider
-    }
-    if (ImGui::InputFloat("Manual FOV", &camera.fovy, 0.0f, 0.0f, "%.1f"))
-    {
-        camera.fovy = std::clamp(camera.fovy, 10.0f, 179.9f);
-    }
-    ImGui::PopID();
+    auto cameraDirection = Vector3Normalize(camera.target - camera.position);
+    auto cameraRight = Vector3CrossProduct(cameraDirection, camera.up);
+    camera.up = Vector3Normalize(Vector3CrossProduct(cameraRight, cameraDirection));
 
     // Image Brightness Control
     ImGui::Text("Brightness:");
     ImGui::PushID("Brightness");
-    if (ImGui::SliderFloat("Brightness", &brightness, 0.0f, 10.0f, "%.1f"))
-    {
-        // Optional: Logic when FOV changes via slider
-    }
-    if (ImGui::InputFloat("Manual Brightness", &brightness, 0.0f, 0.0f, "%.1f"))
+    if (ImGui::DragFloat("Brightness", &brightness, 0.5f, 0.0f, 10.0f, "%.1f"))
     {
         brightness = std::clamp(brightness, 0.0f, 10.0f);
     }
