@@ -24,7 +24,8 @@ Camera3D camera = {.position = {0, 0, -128},
 float camRotateX = 180;
 float brightness = 1.0f;
 bool applyMask = false;
-float maskStrength[6] = {0};
+float maskStrength[8] = {0, 0.15f, 0.1f, 0.6f, 1.0f, 0.7f, 0.7f, 0.5f};
+int zoom = 128;
 
 void drawDebugMenu();
 
@@ -91,7 +92,7 @@ int main()
         rlSetUniform(3, iResolution, RL_SHADER_UNIFORM_IVEC2, 1);
         rlSetUniform(6, &camera, RL_SHADER_UNIFORM_FLOAT, 11);
         rlSetUniform(16, &applyMask, RL_SHADER_UNIFORM_INT, 1);
-        rlSetUniform(17, maskStrength, RL_SHADER_UNIFORM_FLOAT, 6);
+        rlSetUniform(17, maskStrength, RL_SHADER_UNIFORM_FLOAT, 8);
         rlComputeShaderDispatch(static_cast<unsigned int>(ceil(WIN_WIDTH / 8.0)),
                                 static_cast<unsigned int>(ceil(WIN_HEIGHT / 8.0)),
                                 1);
@@ -240,11 +241,20 @@ void loadVolumeMasks(uint8_t *cube)
             case 33: // venous system
                 cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 3;
                 break;
-            case 161: // portal vein
+            case 17: // portal vein
                 cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 4;
                 break;
-            case 17: // ???
+            case 193: // gallbladder
                 cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 5;
+                break;
+            case 131: // tumor
+                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 6;
+                break;
+            case 133: // liver cyst
+                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 7;
+                break;
+            default:
+                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 0;
                 break;
             }
         }
@@ -281,11 +291,15 @@ void drawDebugMenu()
     {
         camera.fovy = std::clamp(camera.fovy, 10.0f, 150.0f);
     }
+    if (ImGui::DragInt("Distance", &zoom, 1, 10, 150))
+    {
+        zoom = std::clamp(zoom, 10, 150);
+    }
     ImGui::PopID();
 
     camera.position =
         camera.target +
-        Vector3Normalize(Vector3{cosf(camRotateX * DEG2RAD), 0, sinf(camRotateX * DEG2RAD)}) * 128;
+        Vector3Normalize(Vector3{cosf(camRotateX * DEG2RAD), 0, sinf(camRotateX * DEG2RAD)}) * zoom;
 
     auto cameraDirection = Vector3Normalize(camera.target - camera.position);
     auto cameraRight = Vector3CrossProduct(cameraDirection, camera.up);
@@ -301,11 +315,13 @@ void drawDebugMenu()
     ImGui::Checkbox("Apply Masks", &applyMask);
     if (applyMask)
     {
-        ImGui::SliderFloat("1", maskStrength + 1, 0.0f, 1.0f);
-        ImGui::SliderFloat("2", maskStrength + 2, 0.0f, 1.0f);
-        ImGui::SliderFloat("3", maskStrength + 3, 0.0f, 1.0f);
-        ImGui::SliderFloat("4", maskStrength + 4, 0.0f, 1.0f);
-        ImGui::SliderFloat("5", maskStrength + 5, 0.0f, 1.0f);
+        ImGui::SliderFloat("Bones", maskStrength + 1, 0.0f, 1.0f);
+        ImGui::SliderFloat("Liver", maskStrength + 2, 0.0f, 1.0f);
+        ImGui::SliderFloat("Liver Tumor", maskStrength + 6, 0.0f, 1.0f);
+        ImGui::SliderFloat("Liver Cyst", maskStrength + 7, 0.0f, 1.0f);
+        ImGui::SliderFloat("Venous System", maskStrength + 3, 0.0f, 1.0f);
+        ImGui::SliderFloat("Portal Vein", maskStrength + 4, 0.0f, 1.0f);
+        ImGui::SliderFloat("Gallbladder", maskStrength + 5, 0.0f, 1.0f);
     }
     ImGui::PopID();
 

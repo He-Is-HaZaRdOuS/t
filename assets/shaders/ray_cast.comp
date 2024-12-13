@@ -23,7 +23,7 @@ layout (location = 3) uniform ivec2 resolution;
 layout (location = 5) uniform int volumeSize;
 layout (location = 6) uniform float cameraData[];
 layout (location = 16) uniform int applyMask;
-layout (location = 17) uniform float MaskStrength[6];
+layout (location = 17) uniform float MaskStrength[8];
 
 struct Camera3D {
     vec3 position;       // Camera position
@@ -44,7 +44,9 @@ vec4(1.0f, 1.0f, 1.0f, 1.0f), // bones
 vec4(1.0f, 0.25f, 0.25f, 1.0f), // liver
 vec4(0.5f, 0.5f, 1.0f, 1.0f), // venous system
 vec4(0.5f, 0.7f, 1.0f, 1.0f), // portal vein
-vec4(0.0f, 1.0f, 0.0f, 1.0f) // ???
+vec4(0.5f, 1.0f, 0.5f, 1.0f), // gallbladder
+vec4(0.0f, 1.0f, 0.0f, 1.0f), // tumor
+vec4(1.0f, 1.0f, 0.0f, 1.0f) // liver cyst
 };
 
 vec3 ScreenToRayDirection(Camera3D camera, uint x, uint y) {
@@ -95,8 +97,9 @@ vec4 RayCastThroughVolume(Ray r)
     // Ray traversal through the volume
     vec3 currentPosition = r.origin + r.direction * tStart;
     float stepSize = cellSize / 2.0f; // Step size for ray traversal
-    float maxAlpha = 0.0f;
-    vec4 accumulatedColor = vec4(0);
+    float maxAlpha = 0.0f; // for MIP
+    vec3 accumulatedColor = vec3(0);
+    float accumulatedAlpha = 0.0f;
 
     while (tStart < tEnd)
     {
@@ -113,9 +116,11 @@ vec4 RayCastThroughVolume(Ray r)
                 float voxelAlpha = float(value) / 255.0f;
                 maxAlpha = max(maxAlpha, voxelAlpha);
             } else {
+                // alpha blending
                 int mask = int(volumeMaskBuffer[(y * volumeSize * volumeSize) + (x * volumeSize) + z]);
                 if (mask > 0) {
-                    accumulatedColor = accumulatedColor + ColorLUT[mask] * MaskStrength[mask] / 100.0f;
+                    accumulatedColor = accumulatedColor + (1.0f - accumulatedAlpha) * ColorLUT[mask].rgb * MaskStrength[mask] * 0.1f;
+                    accumulatedAlpha = accumulatedAlpha + (1.0f - accumulatedAlpha) * MaskStrength[mask] * 0.1f;
                 }
             }
         }
@@ -126,7 +131,7 @@ vec4 RayCastThroughVolume(Ray r)
     }
 
     if (applyMask == 1) {
-        return accumulatedColor;
+        return vec4(accumulatedColor.rgb, accumulatedAlpha);
     } else {
         return vec4(1.0f, 1.0f, 1.0f, maxAlpha);
     }
