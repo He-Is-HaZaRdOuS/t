@@ -21,7 +21,8 @@ Camera3D camera = {.position = {0, 0, -128},
                    .up = {0, 1, 0},
                    .fovy = 45,
                    .projection = CAMERA_PERSPECTIVE};
-float camRotateX = 180;
+float camRotateX = 90;
+float camRotateY = 0;
 float brightness = 1.0f;
 bool applyMask = false;
 float maskStrength[8] = {0, 0.15f, 0.1f, 0.6f, 1.0f, 0.7f, 0.7f, 0.5f};
@@ -283,9 +284,13 @@ void drawDebugMenu()
     ImGui::Text("Camera Controls:");
 
     ImGui::PushID("Controls");
-    if (ImGui::DragFloat("Rotation", &camRotateX, 2.0f, -360.0f, 360.0f, "%.2f"))
+    if (ImGui::DragFloat("RotationX", &camRotateX, 2.0f, -360.0f, 360.0f, "%.2f"))
     {
         camRotateX = std::clamp(camRotateX, -360.0f, 360.0f);
+    }
+    if (ImGui::DragFloat("RotationY", &camRotateY, 2.0f, -90.0f, 90.0f, "%.2f"))
+    {
+        camRotateY = std::clamp(camRotateY, -89.9f, 89.9f);
     }
     if (ImGui::DragFloat("FOV", &camera.fovy, 1.0f, 10.0f, 150.0f, "%.1f"))
     {
@@ -297,18 +302,32 @@ void drawDebugMenu()
     }
     ImGui::PopID();
 
-    camera.position =
-        camera.target +
-        Vector3Normalize(Vector3{cosf(camRotateX * DEG2RAD), 0, sinf(camRotateX * DEG2RAD)}) * zoom;
+    // Compute forward direction (camera look-at direction relative to target)
+    Vector3 forward = Vector3Normalize(Vector3{
+        cosf(camRotateY * DEG2RAD) * sinf(camRotateX * DEG2RAD), // Z-component
+        sinf(camRotateY * DEG2RAD),                             // Y-component
+        cosf(camRotateY * DEG2RAD) * cosf(camRotateX * DEG2RAD)  // X-component
+    });
 
-    auto cameraDirection = Vector3Normalize(camera.target - camera.position);
-    auto cameraRight = Vector3CrossProduct(cameraDirection, camera.up);
-    camera.up = Vector3Normalize(Vector3CrossProduct(cameraRight, cameraDirection));
+    // Fixed global up vector (world-space Y-axis)
+    Vector3 globalUp = Vector3{0, 1, 0};
+
+    // Compute right vector (perpendicular to forward and global up)
+    Vector3 right = Vector3Normalize(Vector3CrossProduct(globalUp, forward));
+
+    // Ensure a stable up vector (recalculate it to be perpendicular to forward and right)
+    Vector3 up = Vector3Normalize(Vector3CrossProduct(forward, right));
+
+    // Assign calculated up vector to camera
+    camera.up = up;
+
+    // Compute final camera position at a fixed distance (zoom) from target
+    camera.position = camera.target - forward * zoom;
 
     // Image Brightness Control
     ImGui::Text("Brightness:");
     ImGui::PushID("Brightness");
-    if (ImGui::DragFloat("Brightness", &brightness, 0.5f, 0.0f, 10.0f, "%.1f"))
+    if (ImGui::DragFloat("Brightness", &brightness, 0.2f, 0.0f, 10.0f, "%.1f"))
     {
         brightness = std::clamp(brightness, 0.0f, 10.0f);
     }
