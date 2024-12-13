@@ -2,7 +2,7 @@
 #ifndef GAME_H
 #define GAME_H
 
-#include "Constants.h"
+#include "Constants.hpp"
 #include "DICOMAppHelper.h"
 #include "DICOMParser.h"
 
