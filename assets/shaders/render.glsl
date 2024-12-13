@@ -2,7 +2,7 @@
 
 layout (std430, binding = 1) readonly buffer dvrLayout
 {
-    float dvrBuffer[];
+    vec4 dvrBuffer[];
 };
 
 in vec2 fragTexCoord;
@@ -13,6 +13,6 @@ uniform float brightness;
 void main()
 {
     ivec2 coords = ivec2(fragTexCoord * resolution);
-    float alpha = dvrBuffer[coords.x + coords.y * uvec2(resolution).x];
-    finalColor = vec4(1.0f, 1.0f, 1.0f, alpha * brightness);
+    vec4 color = dvrBuffer[coords.x + coords.y * int(resolution.x)];
+    finalColor = vec4(color.rgb, color.a * brightness);
 }

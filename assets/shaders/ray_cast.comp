@@ -1,6 +1,30 @@
 #version 430
 #extension GL_NV_gpu_shader5: enable
 
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout (std430, binding = 4) readonly restrict buffer volumeData {
+    uint8_t volumeBuffer[];
+};
+
+layout (std430, binding = 7) readonly restrict buffer volumeMaskData {
+    uint8_t volumeMaskBuffer[];
+};
+
+layout (std430, binding = 1) readonly restrict buffer dvrLayout {
+    vec4 dvrBuffer[];
+};
+
+layout (std430, binding = 2) writeonly restrict buffer dvrLayout2 {
+    vec4 dvrBufferDest[];
+};
+
+layout (location = 3) uniform ivec2 resolution;
+layout (location = 5) uniform int volumeSize;
+layout (location = 6) uniform float cameraData[];
+layout (location = 16) uniform int applyMask;
+layout (location = 17) uniform float MaskStrength[6];
+
 struct Camera3D {
     vec3 position;       // Camera position
     vec3 target;         // Camera target it looks-at
@@ -14,25 +38,14 @@ struct Ray {
     vec3 direction;
 };
 
-layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
-
-layout (std430, binding = 1) readonly restrict buffer dvrLayout {
-    float dvrBuffer[];
+vec4 ColorLUT[] = {
+vec4(0.0f, 0.0f, 0.0f, 0.0f), // empty space
+vec4(1.0f, 1.0f, 1.0f, 1.0f), // bones
+vec4(1.0f, 0.25f, 0.25f, 1.0f), // liver
+vec4(0.5f, 0.5f, 1.0f, 1.0f), // venous system
+vec4(0.5f, 0.7f, 1.0f, 1.0f), // portal vein
+vec4(0.0f, 1.0f, 0.0f, 1.0f) // ???
 };
-
-layout (std430, binding = 2) writeonly restrict buffer dvrLayout2 {
-    float dvrBufferDest[];
-};
-
-layout (location = 3) uniform ivec2 resolution;
-
-layout (std430, binding = 4) readonly restrict buffer volumeData {
-    uint8_t volumeBuffer[];
-};
-layout (location = 5) uniform int volumeSize;
-
-layout (location = 6) uniform float cameraData[];
-
 
 vec3 ScreenToRayDirection(Camera3D camera, uint x, uint y) {
     float normX = ((float(x) / float(resolution.x)) - 0.5f) * 2.0f;
@@ -49,7 +62,7 @@ vec3 ScreenToRayDirection(Camera3D camera, uint x, uint y) {
     return normalize(rayDirection);
 }
 
-float RayCastThroughVolume(Ray r)
+vec4 RayCastThroughVolume(Ray r)
 {
     const float cellSize = 0.125f;
 
@@ -76,13 +89,14 @@ float RayCastThroughVolume(Ray r)
 
     if (tStart > tEnd || tEnd < 0.0f)
     {
-        return 0.0f; // No intersection
+        return vec4(.0f, .0f, .0f, .0f); // No intersection
     }
 
     // Ray traversal through the volume
     vec3 currentPosition = r.origin + r.direction * tStart;
     float stepSize = cellSize / 2.0f; // Step size for ray traversal
     float maxAlpha = 0.0f;
+    vec4 accumulatedColor = vec4(0);
 
     while (tStart < tEnd)
     {
@@ -93,13 +107,16 @@ float RayCastThroughVolume(Ray r)
 
         if (x >= 0 && x < volumeSize && y >= 0 && y < volumeSize && z >= 0 && z < volumeSize)
         {
-            // Get voxel value and map it to a color (grayscale)
-            uint8_t value = volumeBuffer[(y * volumeSize * volumeSize) + (x * volumeSize) + z];
-            float voxelAlpha = float(value) / 255.0f;
-
             // maximum intensity projection
-            if (voxelAlpha > maxAlpha) {
-                maxAlpha = voxelAlpha;
+            if (applyMask == 0) {
+                uint8_t value = volumeBuffer[(y * volumeSize * volumeSize) + (x * volumeSize) + z];
+                float voxelAlpha = float(value) / 255.0f;
+                maxAlpha = max(maxAlpha, voxelAlpha);
+            } else {
+                int mask = int(volumeMaskBuffer[(y * volumeSize * volumeSize) + (x * volumeSize) + z]);
+                if (mask > 0) {
+                    accumulatedColor = accumulatedColor + ColorLUT[mask] * MaskStrength[mask] / 100.0f;
+                }
             }
         }
 
@@ -108,7 +125,11 @@ float RayCastThroughVolume(Ray r)
         tStart += stepSize;
     }
 
-    return maxAlpha;
+    if (applyMask == 1) {
+        return accumulatedColor;
+    } else {
+        return vec4(1.0f, 1.0f, 1.0f, maxAlpha);
+    }
 }
 
 void main()
@@ -127,7 +148,7 @@ void main()
     Ray r;
     r.origin = camera.position;
     r.direction = rayDirection;
-    float alpha = RayCastThroughVolume(r);
+    vec4 color = RayCastThroughVolume(r);
 
-    dvrBufferDest[(id.x) + resolution.x * (id.y)] = alpha;
+    dvrBufferDest[(id.x) + resolution.x * (id.y)] = color;
 }
