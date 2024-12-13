@@ -8,11 +8,11 @@
 #include <algorithm>
 #include <cmath>
 #include <imgui.h>
-#include <iostream>
-#include <stdint.h>
+#include <cstdint>
+#include <string>
 
-#define WIN_WIDTH 1366
-#define WIN_HEIGHT 768
+#define WIN_WIDTH 1920
+#define WIN_HEIGHT 1080
 
 #define CUBE_SIZE 512
 
@@ -42,22 +42,23 @@ int main()
     loadVolumeData(cube);
     loadVolumeMasks(masks);
 
+    //SetWindowState(FLAG_MSAA_4X_HINT);
     InitWindow(WIN_WIDTH, WIN_HEIGHT, "DVR_GPU");
     rlImGuiSetup(true);
 
-    const Vector2 resolution = {WIN_WIDTH, WIN_HEIGHT};
-    const int iResolution[2] = {WIN_WIDTH, WIN_HEIGHT};
+    constexpr Vector2 resolution = {WIN_WIDTH, WIN_HEIGHT};
+    constexpr int iResolution[2] = {WIN_WIDTH, WIN_HEIGHT};
 
     // compute shader
     char *dvrComputeSource = LoadFileText(ASSETS_PATH "shaders/ray_cast.comp");
-    auto dvrComputeShader = rlCompileShader(dvrComputeSource, RL_COMPUTE_SHADER);
-    auto dvrComputeProgram = rlLoadComputeShaderProgram(dvrComputeShader);
+    const auto dvrComputeShader = rlCompileShader(dvrComputeSource, RL_COMPUTE_SHADER);
+    const auto dvrComputeProgram = rlLoadComputeShaderProgram(dvrComputeShader);
     UnloadFileText(dvrComputeSource);
 
     // render shader (fragment)
-    Shader dvrRenderShader = LoadShader(NULL, ASSETS_PATH "shaders/render.glsl");
-    int resUniformLoc = GetShaderLocation(dvrRenderShader, "resolution");
-    int brightUniformLoc = GetShaderLocation(dvrRenderShader, "brightness");
+    const Shader dvrRenderShader = LoadShader(NULL, ASSETS_PATH "shaders/render.glsl");
+    const int resUniformLoc = GetShaderLocation(dvrRenderShader, "resolution");
+    const int brightUniformLoc = GetShaderLocation(dvrRenderShader, "brightness");
 
     // Load shader storage buffer object (SSBO), id returned
     constexpr auto bufferSize = WIN_WIDTH * WIN_HEIGHT * sizeof(Vector4);
@@ -67,17 +68,17 @@ int main()
     // upload volume data
     constexpr auto volumeBufferSize = CUBE_SIZE * CUBE_SIZE * CUBE_SIZE * sizeof(uint8_t);
     rlEnableShader(dvrComputeProgram);
-    auto volumeDataSSBO = rlLoadShaderBuffer(volumeBufferSize, cube, RL_STATIC_READ);
-    auto volumeDataMaskSSBO = rlLoadShaderBuffer(volumeBufferSize, masks, RL_STATIC_READ);
+    const auto volumeDataSSBO = rlLoadShaderBuffer(volumeBufferSize, cube, RL_STATIC_READ);
+    const auto volumeDataMaskSSBO = rlLoadShaderBuffer(volumeBufferSize, masks, RL_STATIC_READ);
     rlBindShaderBuffer(volumeDataSSBO, 4);
     rlBindShaderBuffer(volumeDataMaskSSBO, 7);
-    int volumeSize = CUBE_SIZE;
+    const int volumeSize = CUBE_SIZE;
     rlSetUniform(5, &volumeSize, RL_SHADER_UNIFORM_INT, 1);
 
     // Create a white texture of the size of the window to update
     // each pixel of the window using the fragment shader
-    Image whiteImage = GenImageColor(WIN_WIDTH, WIN_HEIGHT, WHITE);
-    Texture whiteTex = LoadTextureFromImage(whiteImage);
+    const Image whiteImage = GenImageColor(WIN_WIDTH, WIN_HEIGHT, WHITE);
+    const Texture whiteTex = LoadTextureFromImage(whiteImage);
     UnloadImage(whiteImage);
 
     // Main game loop
@@ -100,7 +101,7 @@ int main()
         rlDisableShader();
 
         // swap SSBO's
-        auto temp = ssboA;
+        const auto temp = ssboA;
         ssboA = ssboB;
         ssboB = temp;
 
@@ -152,7 +153,7 @@ void loadVolumeData(uint8_t *cube)
 
     const std::string BaseFileName = ASSETS_PATH "dicom/PATIENT_DICOM/image_";
     int fileCount = 0;
-    int maxFileCount = 124;
+    constexpr int maxFileCount = 124;
 
     while (fileCount < maxFileCount)
     {
@@ -169,15 +170,15 @@ void loadVolumeData(uint8_t *cube)
         unsigned long imageDataLength = 0;
 
         appHelper.GetImageData(imgData, dataType, imageDataLength);
-        auto numPixels = imageDataLength / 2;
+        const auto numPixels = imageDataLength / 2;
 
         for (size_t i = 0; i < numPixels && i < CUBE_SIZE * CUBE_SIZE; ++i)
         {
             // -1024 <= pixelVal <= 1023
-            int16_t pixelVal = ((int16_t *)imgData)[i];
+            int16_t pixelVal = static_cast<int16_t *>(imgData)[i];
             if (pixelVal >= -128)
             {
-                uint8_t compressed = (uint8_t)((float(pixelVal + 128) / (128 + 1023)) * UINT8_MAX);
+                uint8_t compressed = static_cast<uint8_t>((static_cast<float>(pixelVal + 128) / (128 + 1023)) * UINT8_MAX);
                 cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = compressed;
             }
         }
@@ -186,7 +187,7 @@ void loadVolumeData(uint8_t *cube)
     appHelper.Clear();
 
     // generate filler slices by LERPing actual slices
-    const auto layerSize = CUBE_SIZE * CUBE_SIZE;
+    constexpr auto layerSize = CUBE_SIZE * CUBE_SIZE;
     for (int i = 0; (i + 4) <= (CUBE_SIZE - 1); i += 4)
     {
         for (int p = 0; p < layerSize; ++p)
@@ -208,7 +209,7 @@ void loadVolumeMasks(uint8_t *cube)
 
     const std::string BaseFileName = ASSETS_PATH "dicom/LABELLED_DICOM/image_";
     int fileCount = 0;
-    int maxFileCount = 124;
+    constexpr int maxFileCount = 124;
 
     while (fileCount < maxFileCount)
     {
@@ -230,7 +231,7 @@ void loadVolumeMasks(uint8_t *cube)
         for (size_t i = 0; i < numPixels && i < CUBE_SIZE * CUBE_SIZE; ++i)
         {
             // -1024 <= pixelVal <= 1023
-            int16_t pixelVal = ((int16_t *)imgData)[i];
+            int16_t pixelVal = static_cast<int16_t *>(imgData)[i];
             switch (pixelVal)
             {
             case 65: // bone
@@ -263,7 +264,7 @@ void loadVolumeMasks(uint8_t *cube)
     }
     appHelper.Clear();
     // generate filler slices by LERPing actual slices
-    const auto layerSize = CUBE_SIZE * CUBE_SIZE;
+    constexpr auto layerSize = CUBE_SIZE * CUBE_SIZE;
     for (int i = 0; (i + 4) <= (CUBE_SIZE - 1); i += 4)
     {
         for (int p = 0; p < layerSize; ++p)
@@ -288,7 +289,7 @@ void drawDebugMenu()
     {
         camRotateX = std::clamp(camRotateX, -360.0f, 360.0f);
     }
-    if (ImGui::DragFloat("RotationY", &camRotateY, 2.0f, -90.0f, 90.0f, "%.2f"))
+    if (ImGui::DragFloat("RotationY", &camRotateY, 2.0f, -89.9f, 89.9f, "%.2f"))
     {
         camRotateY = std::clamp(camRotateY, -89.9f, 89.9f);
     }
@@ -303,20 +304,20 @@ void drawDebugMenu()
     ImGui::PopID();
 
     // Compute forward direction (camera look-at direction relative to target)
-    Vector3 forward = Vector3Normalize(Vector3{
+    Vector3 const forward = Vector3Normalize(Vector3{
         cosf(camRotateY * DEG2RAD) * sinf(camRotateX * DEG2RAD), // Z-component
         sinf(camRotateY * DEG2RAD),                             // Y-component
         cosf(camRotateY * DEG2RAD) * cosf(camRotateX * DEG2RAD)  // X-component
     });
 
     // Fixed global up vector (world-space Y-axis)
-    Vector3 globalUp = Vector3{0, 1, 0};
+    constexpr Vector3 globalUp = Vector3{0, 1, 0};
 
     // Compute right vector (perpendicular to forward and global up)
-    Vector3 right = Vector3Normalize(Vector3CrossProduct(globalUp, forward));
+    const Vector3 right = Vector3Normalize(Vector3CrossProduct(globalUp, forward));
 
     // Ensure a stable up vector (recalculate it to be perpendicular to forward and right)
-    Vector3 up = Vector3Normalize(Vector3CrossProduct(forward, right));
+    const Vector3 up = Vector3Normalize(Vector3CrossProduct(forward, right));
 
     // Assign calculated up vector to camera
     camera.up = up;
