@@ -40,7 +40,7 @@ Use ImGUI's buttons and sliders to adjust the camera settings and other paramete
 Requires an Nvidia GPU supporting programmable compute shaders (GTX 600+)
 
 ```shell
-__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia ./build/bin/DVR_GPU
+__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia ./build/bin/DVR_GPU <slice_thickness> <base_directory> <optional: mask_base_directory>
 ```
 
 With the program running, press the <kbd>F</kbd> key to toggle fullscreen mode. <br>

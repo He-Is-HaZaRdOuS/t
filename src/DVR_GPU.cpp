@@ -10,6 +10,7 @@
 #include <imgui.h>
 #include <iostream>
 #include <stdint.h>
+#include <filesystem>
 
 #define WIN_WIDTH 1366
 #define WIN_HEIGHT 768
@@ -28,6 +29,7 @@ int zoom = 128;
 
 std::string BaseFileName;
 std::string MaskBaseFileName;
+std::string Prefix;
 int FileCount;
 int SliceThickness;
 bool HasMask;
@@ -44,6 +46,12 @@ void loadVolumeMasks();
 
 void processArgs(int argc, char *argv[]);
 
+std::string extractDirectory(const std::string& imagedir);
+
+std::string inferPrefix(const std::string& directory);
+
+int countFilesWithPrefix(const std::string& directory, const std::string& prefix);
+
 void reorderVolumes();
 
 int main(int argc, char *argv[])
@@ -56,6 +64,7 @@ int main(int argc, char *argv[])
     std::cout << "Resolution: " << Width << "x" << Height << "\n";
     std::cout << "Slice Count: " << FileCount << "\n";
     std::cout << "Slice Thickness: " << SliceThickness << "\n";
+    std::cout << "Has Mask?: " << (HasMask ? "Yes" : "No") << "\n";
 
     InitWindow(WIN_WIDTH, WIN_HEIGHT, "DVR_GPU");
     rlImGuiSetup(true);
@@ -172,7 +181,7 @@ void loadVolumeData()
     while (currentFile < FileCount)
     {
         parser.ClearAllDICOMTagCallbacks();
-        parser.OpenFile(BaseFileName + std::to_string(currentFile));
+        parser.OpenFile(BaseFileName + Prefix + std::to_string(currentFile));
         appHelper.Clear();
         appHelper.RegisterCallbacks(&parser);
         appHelper.RegisterPixelDataCallback(&parser);
@@ -233,7 +242,7 @@ void loadVolumeMasks()
     while (currentFile < FileCount)
     {
         parser.ClearAllDICOMTagCallbacks();
-        parser.OpenFile(MaskBaseFileName + std::to_string(currentFile));
+        parser.OpenFile(MaskBaseFileName + Prefix + std::to_string(currentFile));
         appHelper.Clear();
         appHelper.RegisterCallbacks(&parser);
         appHelper.RegisterPixelDataCallback(&parser);
@@ -378,32 +387,68 @@ void drawDebugMenu()
 
 void processArgs(int argc, char *argv[])
 {
-    if (argc < 4)
+    if (argc < 3)
     {
         std::string errMsg = "";
-        errMsg += "Expected at least 3 arguments. Usage: ";
-        errMsg += "./DVR_GPU file_count slice_thickness base_file_name <optional: "
-                  "mask_base_file_name>\n";
+        errMsg += "Expected at least 2 arguments. Usage: ";
+        errMsg += "./DVR_GPU slice_thickness base_directory <optional: "
+                  "mask_base_directory>\n";
         errMsg += argv[0];
-        errMsg += " 124 4 myDicoms/PATIENT_DICOM/image_ myDicoms/LABELLED_DICOM/image_\n";
+        errMsg += " 4 myDicoms/PATIENT_DICOM/ myDicoms/LABELLED_DICOM/\n";
         throw std::runtime_error(errMsg);
     }
-    FileCount = atoi(argv[1]);
-    SliceThickness = (int)ceil(atof(argv[2]));
-    BaseFileName = std::string(argv[3]);
-    if (argc == 5)
+    SliceThickness = (int)ceil(atof(argv[1]));
+    BaseFileName = std::string(argv[2]);
+    auto dir = extractDirectory(BaseFileName);
+    Prefix = inferPrefix(dir);
+    FileCount = countFilesWithPrefix(dir, Prefix);
+    if (argc == 4)
     {
-        MaskBaseFileName = std::string(argv[4]);
+        MaskBaseFileName = std::string(argv[3]);
         HasMask = true;
     }
+}
+
+
+
+std::string extractDirectory(const std::string& imagedir) {
+    return std::filesystem::path(imagedir).parent_path().string(); // Get the directory part
+}
+
+std::string inferPrefix(const std::string& directory) {
+    for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+        if (entry.is_regular_file()) {
+            const std::string filename = entry.path().filename().string();
+            size_t underscorePos = filename.find('_');
+            if (underscorePos != std::string::npos) {
+                return filename.substr(0, underscorePos + 1); // Include the underscore in the prefix
+            }
+        }
+    }
+    throw std::runtime_error("No valid files found to infer the prefix.");
+}
+
+int countFilesWithPrefix(const std::string& directory, const std::string& prefix) {
+    int count = 0;
+
+    for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+        if (entry.is_regular_file()) {
+            const std::string filename = entry.path().filename().string();
+            if (filename.rfind(prefix, 0) == 0) { // Check if filename starts with prefix
+                ++count;
+            }
+        }
+    }
+
+    return count;
 }
 
 void reorderVolumes()
 {
     uint8_t *reorderBuffer = new uint8_t[Width * Height * FileCount * SliceThickness];
     for (int z = 0; z < FileCount * SliceThickness; ++z)
-        for (int x = 0; x < Width; ++x)
-            for (int y = 0; y < Height; ++y)
+        for (int y = 0; y < Height; ++y)
+            for (int x = 0; x < Width; ++x)
                 reorderBuffer[(y * FileCount * SliceThickness * Width) + (z * Width) + x] =
                     Volume[(z * Height * Width) + (y * Width) + x];
     for (int i = 0; i < Width * Height * FileCount * SliceThickness; ++i)
@@ -415,8 +460,8 @@ void reorderVolumes()
         return;
     }
     for (int z = 0; z < FileCount * SliceThickness; ++z)
-        for (int x = 0; x < Width; ++x)
-            for (int y = 0; y < Height; ++y)
+        for (int y = 0; y < Height; ++y)
+            for (int x = 0; x < Width; ++x)
                 reorderBuffer[(y * FileCount * SliceThickness * Width) + (z * Width) + x] =
                     VolumeMask[(z * Height * Width) + (y * Width) + x];
     for (int i = 0; i < Width * Height * FileCount * SliceThickness; ++i)
