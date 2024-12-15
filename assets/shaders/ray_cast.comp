@@ -20,7 +20,7 @@ layout (std430, binding = 2) writeonly restrict buffer dvrLayout2 {
 };
 
 layout (location = 3) uniform ivec2 resolution;
-layout (location = 5) uniform int volumeSize;
+layout (location = 5) uniform ivec3 volumeSize;
 layout (location = 6) uniform float cameraData[];
 layout (location = 16) uniform int applyMask;
 layout (location = 17) uniform float MaskStrength[8];
@@ -69,8 +69,8 @@ vec4 RayCastThroughVolume(Ray r)
     const float cellSize = 0.125f;
 
     // Define cube bounds (assuming cube is centered at origin)
-    const float cubeMin = -volumeSize * 0.5f * cellSize;
-    const float cubeMax = volumeSize * 0.5f * cellSize;
+    const vec3 cubeMin = - vec3(volumeSize) * 0.5f * cellSize;
+    const vec3 cubeMax = vec3(volumeSize) * 0.5f * cellSize;
 
     // Ray-box intersection
     float INFINITY = 3.40282347e+38F;
@@ -80,8 +80,8 @@ vec4 RayCastThroughVolume(Ray r)
     (r.direction.z != 0.0f) ? 1.0f / r.direction.z : INFINITY
     );
 
-    vec3 tMin = (vec3(cubeMin, cubeMin, cubeMin) - r.origin) * invRayDir;
-    vec3 tMax = (vec3(cubeMax, cubeMax, cubeMax) - r.origin) * invRayDir;
+    vec3 tMin = (cubeMin - r.origin) * invRayDir;
+    vec3 tMax = (cubeMax - r.origin) * invRayDir;
 
     vec3 tEnter = vec3(min(tMin.x, tMax.x), min(tMin.y, tMax.y), min(tMin.z, tMax.z));
     vec3 tExit = vec3(max(tMin.x, tMax.x), max(tMin.y, tMax.y), max(tMin.z, tMax.z));
@@ -104,20 +104,20 @@ vec4 RayCastThroughVolume(Ray r)
     while (tStart < tEnd)
     {
         // Map world position to volume indices
-        int x = int((currentPosition.x - cubeMin) / cellSize);
-        int y = int((currentPosition.y - cubeMin) / cellSize);
-        int z = int((currentPosition.z - cubeMin) / cellSize);
+        int x = int((currentPosition.x - cubeMin.x) / cellSize);
+        int y = int((currentPosition.y - cubeMin.y) / cellSize);
+        int z = int((currentPosition.z - cubeMin.z) / cellSize);
 
-        if (x >= 0 && x < volumeSize && y >= 0 && y < volumeSize && z >= 0 && z < volumeSize)
+        if (x >= 0 && x < volumeSize.x && y >= 0 && y < volumeSize.y && z >= 0 && z < volumeSize.z)
         {
             // maximum intensity projection
             if (applyMask == 0) {
-                uint8_t value = volumeBuffer[(y * volumeSize * volumeSize) + (x * volumeSize) + z];
+                uint8_t value = volumeBuffer[(z * volumeSize.y * volumeSize.x) + (y * volumeSize.x) + x];
                 float voxelAlpha = float(value) / 255.0f;
                 maxAlpha = max(maxAlpha, voxelAlpha);
             } else {
                 // alpha blending
-                int mask = int(volumeMaskBuffer[(y * volumeSize * volumeSize) + (x * volumeSize) + z]);
+                int mask = int(volumeMaskBuffer[(z * volumeSize.y * volumeSize.x) + (y * volumeSize.x) + x]);
                 if (mask > 0) {
                     accumulatedColor = accumulatedColor + (1.0f - accumulatedAlpha) * ColorLUT[mask].rgb * MaskStrength[mask] * 0.1f;
                     accumulatedAlpha = accumulatedAlpha + (1.0f - accumulatedAlpha) * MaskStrength[mask] * 0.1f;

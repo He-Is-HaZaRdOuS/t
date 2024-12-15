@@ -14,33 +14,48 @@
 #define WIN_WIDTH 1366
 #define WIN_HEIGHT 768
 
-#define CUBE_SIZE 512
-
 Camera3D camera = {.position = {0, 0, -128},
                    .target = {0, 0, 0},
                    .up = {0, 1, 0},
                    .fovy = 45,
                    .projection = CAMERA_PERSPECTIVE};
-float camRotateX = 90;
+float camRotateX = 0;
 float camRotateY = 0;
 float brightness = 1.0f;
 bool applyMask = false;
 float maskStrength[8] = {0, 0.15f, 0.1f, 0.6f, 1.0f, 0.7f, 0.7f, 0.5f};
 int zoom = 128;
 
+std::string BaseFileName;
+std::string MaskBaseFileName;
+int FileCount;
+int SliceThickness;
+bool HasMask;
+int Width;
+int Height;
+uint8_t *Volume;
+uint8_t *VolumeMask;
+
 void drawDebugMenu();
 
-void loadVolumeData(uint8_t *cube);
+void loadVolumeData();
 
-void loadVolumeMasks(uint8_t *masks);
+void loadVolumeMasks();
 
-int main()
+void processArgs(int argc, char *argv[]);
+
+void reorderVolumes();
+
+int main(int argc, char *argv[])
 {
-    // 2 x 128 mb
-    auto *cube = new uint8_t[CUBE_SIZE * CUBE_SIZE * CUBE_SIZE];
-    auto *masks = new uint8_t[CUBE_SIZE * CUBE_SIZE * CUBE_SIZE];
-    loadVolumeData(cube);
-    loadVolumeMasks(masks);
+    processArgs(argc, argv);
+    loadVolumeData();
+    if (HasMask)
+        loadVolumeMasks();
+    reorderVolumes();
+    std::cout << "Resolution: " << Width << "x" << Height << "\n";
+    std::cout << "Slice Count: " << FileCount << "\n";
+    std::cout << "Slice Thickness: " << SliceThickness << "\n";
 
     InitWindow(WIN_WIDTH, WIN_HEIGHT, "DVR_GPU");
     rlImGuiSetup(true);
@@ -65,14 +80,14 @@ int main()
     auto ssboB = rlLoadShaderBuffer(bufferSize, NULL, RL_DYNAMIC_COPY);
 
     // upload volume data
-    constexpr auto volumeBufferSize = CUBE_SIZE * CUBE_SIZE * CUBE_SIZE * sizeof(uint8_t);
+    auto volumeBufferSize = Width * Height * FileCount * SliceThickness * sizeof(uint8_t);
     rlEnableShader(dvrComputeProgram);
-    auto volumeDataSSBO = rlLoadShaderBuffer(volumeBufferSize, cube, RL_STATIC_READ);
-    auto volumeDataMaskSSBO = rlLoadShaderBuffer(volumeBufferSize, masks, RL_STATIC_READ);
+    auto volumeDataSSBO = rlLoadShaderBuffer(volumeBufferSize, Volume, RL_STATIC_READ);
+    auto volumeDataMaskSSBO = rlLoadShaderBuffer(volumeBufferSize, VolumeMask, RL_STATIC_READ);
     rlBindShaderBuffer(volumeDataSSBO, 4);
     rlBindShaderBuffer(volumeDataMaskSSBO, 7);
-    int volumeSize = CUBE_SIZE;
-    rlSetUniform(5, &volumeSize, RL_SHADER_UNIFORM_INT, 1);
+    int volumeSize[3] = {Width, FileCount * SliceThickness, Height};
+    rlSetUniform(5, &volumeSize, RL_SHADER_UNIFORM_IVEC3, 1);
 
     // Create a white texture of the size of the window to update
     // each pixel of the window using the fragment shader
@@ -126,8 +141,9 @@ int main()
         EndDrawing();
     }
 
-    delete[] cube;
-    delete[] masks;
+    delete[] Volume;
+    if (HasMask)
+        delete[] VolumeMask;
 
     // Unload shader buffers objects.
     rlUnloadShaderBuffer(ssboA);
@@ -145,19 +161,18 @@ int main()
     return 0;
 }
 
-void loadVolumeData(uint8_t *cube)
+void loadVolumeData()
 {
     DICOMAppHelper appHelper;
     DICOMParser parser;
 
-    const std::string BaseFileName = ASSETS_PATH "dicom/PATIENT_DICOM/image_";
-    int fileCount = 0;
-    int maxFileCount = 124;
+    int currentFile = 0;
+    int numPixels;
 
-    while (fileCount < maxFileCount)
+    while (currentFile < FileCount)
     {
         parser.ClearAllDICOMTagCallbacks();
-        parser.OpenFile(BaseFileName + std::to_string(fileCount));
+        parser.OpenFile(BaseFileName + std::to_string(currentFile));
         appHelper.Clear();
         appHelper.RegisterCallbacks(&parser);
         appHelper.RegisterPixelDataCallback(&parser);
@@ -169,51 +184,56 @@ void loadVolumeData(uint8_t *cube)
         unsigned long imageDataLength = 0;
 
         appHelper.GetImageData(imgData, dataType, imageDataLength);
-        auto numPixels = imageDataLength / 2;
-
-        for (size_t i = 0; i < numPixels && i < CUBE_SIZE * CUBE_SIZE; ++i)
+        if (currentFile == 0)
+        {
+            Width = appHelper.GetWidth();
+            Height = appHelper.GetHeight();
+            numPixels = Width * Height;
+            Volume = new uint8_t[numPixels * SliceThickness * FileCount];
+        }
+        for (size_t i = 0; i < numPixels; ++i)
         {
             // -1024 <= pixelVal <= 1023
             int16_t pixelVal = ((int16_t *)imgData)[i];
             if (pixelVal >= -128)
             {
                 uint8_t compressed = (uint8_t)((float(pixelVal + 128) / (128 + 1023)) * UINT8_MAX);
-                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = compressed;
+                Volume[currentFile * SliceThickness * numPixels + i] = compressed;
             }
         }
-        fileCount++;
+        currentFile++;
     }
     appHelper.Clear();
 
     // generate filler slices by LERPing actual slices
-    const auto layerSize = CUBE_SIZE * CUBE_SIZE;
-    for (int i = 0; (i + 4) <= (CUBE_SIZE - 1); i += 4)
+    for (int i = 0; (i + SliceThickness) < FileCount * SliceThickness; i += SliceThickness)
     {
-        for (int p = 0; p < layerSize; ++p)
+        for (int l = 1; l < SliceThickness; ++l)
         {
-            cube[(i + 1) * layerSize + p] =
-                (cube[i * layerSize + p] * 3 + cube[(i + 4) * layerSize + p] * 1) / 4;
-            cube[(i + 2) * layerSize + p] =
-                (cube[i * layerSize + p] * 2 + cube[(i + 4) * layerSize + p] * 2) / 4;
-            cube[(i + 3) * layerSize + p] =
-                (cube[i * layerSize + p] * 1 + cube[(i + 4) * layerSize + p] * 3) / 4;
+            for (int p = 0; p < numPixels; ++p)
+            {
+                Volume[(i + l) * numPixels + p] =
+                    (Volume[i * numPixels + p] * (SliceThickness - l) +
+                     Volume[(i + SliceThickness) * numPixels + p] * l) /
+                    SliceThickness;
+            }
         }
     }
 }
 
-void loadVolumeMasks(uint8_t *cube)
+void loadVolumeMasks()
 {
     DICOMAppHelper appHelper;
     DICOMParser parser;
 
-    const std::string BaseFileName = ASSETS_PATH "dicom/LABELLED_DICOM/image_";
-    int fileCount = 0;
-    int maxFileCount = 124;
+    int currentFile = 0;
+    int numPixels;
+    std::map<uint16_t, Color> masks;
 
-    while (fileCount < maxFileCount)
+    while (currentFile < FileCount)
     {
         parser.ClearAllDICOMTagCallbacks();
-        parser.OpenFile(BaseFileName + std::to_string(fileCount));
+        parser.OpenFile(MaskBaseFileName + std::to_string(currentFile));
         appHelper.Clear();
         appHelper.RegisterCallbacks(&parser);
         appHelper.RegisterPixelDataCallback(&parser);
@@ -225,52 +245,56 @@ void loadVolumeMasks(uint8_t *cube)
         unsigned long imageDataLength = 0;
 
         appHelper.GetImageData(imgData, dataType, imageDataLength);
-        auto numPixels = imageDataLength / 2;
+        if (currentFile == 0)
+        {
+            numPixels = Width * Height;
+            VolumeMask = new uint8_t[numPixels * SliceThickness * FileCount];
+        }
 
-        for (size_t i = 0; i < numPixels && i < CUBE_SIZE * CUBE_SIZE; ++i)
+        for (size_t i = 0; i < numPixels; ++i)
         {
             // -1024 <= pixelVal <= 1023
             int16_t pixelVal = ((int16_t *)imgData)[i];
             switch (pixelVal)
             {
             case 65: // bone
-                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 1;
+                VolumeMask[currentFile * SliceThickness * numPixels + i] = 1;
                 break;
             case 129: // liver
-                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 2;
+                VolumeMask[currentFile * SliceThickness * numPixels + i] = 2;
                 break;
             case 33: // venous system
-                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 3;
+                VolumeMask[currentFile * SliceThickness * numPixels + i] = 3;
                 break;
             case 17: // portal vein
-                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 4;
+                VolumeMask[currentFile * SliceThickness * numPixels + i] = 4;
                 break;
             case 193: // gallbladder
-                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 5;
+                VolumeMask[currentFile * SliceThickness * numPixels + i] = 5;
                 break;
             case 131: // tumor
-                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 6;
+                VolumeMask[currentFile * SliceThickness * numPixels + i] = 6;
                 break;
             case 133: // liver cyst
-                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 7;
+                VolumeMask[currentFile * SliceThickness * numPixels + i] = 7;
                 break;
             default:
-                cube[fileCount * 4 * CUBE_SIZE * CUBE_SIZE + i] = 0;
+                VolumeMask[currentFile * SliceThickness * numPixels + i] = 0;
                 break;
             }
         }
-        fileCount++;
+        currentFile++;
     }
     appHelper.Clear();
-    // generate filler slices by LERPing actual slices
-    const auto layerSize = CUBE_SIZE * CUBE_SIZE;
-    for (int i = 0; (i + 4) <= (CUBE_SIZE - 1); i += 4)
+    // generate filler slices by repeating actual slices
+    for (int i = 0; (i + SliceThickness) < FileCount * SliceThickness; i += SliceThickness)
     {
-        for (int p = 0; p < layerSize; ++p)
+        for (int l = 1; l < SliceThickness; ++l)
         {
-            cube[(i + 1) * layerSize + p] = cube[i * layerSize + p];
-            cube[(i + 2) * layerSize + p] = cube[i * layerSize + p];
-            cube[(i + 3) * layerSize + p] = cube[i * layerSize + p];
+            for (int p = 0; p < numPixels; ++p)
+            {
+                VolumeMask[(i + l) * numPixels + p] = VolumeMask[i * numPixels + p];
+            }
         }
     }
 }
@@ -305,7 +329,7 @@ void drawDebugMenu()
     // Compute forward direction (camera look-at direction relative to target)
     Vector3 forward = Vector3Normalize(Vector3{
         cosf(camRotateY * DEG2RAD) * sinf(camRotateX * DEG2RAD), // Z-component
-        sinf(camRotateY * DEG2RAD),                             // Y-component
+        sinf(camRotateY * DEG2RAD),                              // Y-component
         cosf(camRotateY * DEG2RAD) * cosf(camRotateX * DEG2RAD)  // X-component
     });
 
@@ -331,7 +355,11 @@ void drawDebugMenu()
     {
         brightness = std::clamp(brightness, 0.0f, 10.0f);
     }
-    ImGui::Checkbox("Apply Masks", &applyMask);
+    if (ImGui::Checkbox("Apply Masks", &applyMask))
+    {
+        if (!HasMask)
+            applyMask = false;
+    }
     if (applyMask)
     {
         ImGui::SliderFloat("Bones", maskStrength + 1, 0.0f, 1.0f);
@@ -346,4 +374,53 @@ void drawDebugMenu()
 
     ImGui::End();
     rlImGuiEnd();
+}
+
+void processArgs(int argc, char *argv[])
+{
+    if (argc < 4)
+    {
+        std::string errMsg = "";
+        errMsg += "Expected at least 3 arguments. Usage: ";
+        errMsg += "./DVR_GPU file_count slice_thickness base_file_name <optional: "
+                  "mask_base_file_name>\n";
+        errMsg += argv[0];
+        errMsg += " 124 4 myDicoms/PATIENT_DICOM/image_ myDicoms/LABELLED_DICOM/image_\n";
+        throw std::runtime_error(errMsg);
+    }
+    FileCount = atoi(argv[1]);
+    SliceThickness = (int)ceil(atof(argv[2]));
+    BaseFileName = std::string(argv[3]);
+    if (argc == 5)
+    {
+        MaskBaseFileName = std::string(argv[4]);
+        HasMask = true;
+    }
+}
+
+void reorderVolumes()
+{
+    uint8_t *reorderBuffer = new uint8_t[Width * Height * FileCount * SliceThickness];
+    for (int z = 0; z < FileCount * SliceThickness; ++z)
+        for (int x = 0; x < Width; ++x)
+            for (int y = 0; y < Height; ++y)
+                reorderBuffer[(y * FileCount * SliceThickness * Width) + (z * Width) + x] =
+                    Volume[(z * Height * Width) + (y * Width) + x];
+    for (int i = 0; i < Width * Height * FileCount * SliceThickness; ++i)
+        Volume[i] = reorderBuffer[i];
+
+    if (!HasMask)
+    {
+        delete[] reorderBuffer;
+        return;
+    }
+    for (int z = 0; z < FileCount * SliceThickness; ++z)
+        for (int x = 0; x < Width; ++x)
+            for (int y = 0; y < Height; ++y)
+                reorderBuffer[(y * FileCount * SliceThickness * Width) + (z * Width) + x] =
+                    VolumeMask[(z * Height * Width) + (y * Width) + x];
+    for (int i = 0; i < Width * Height * FileCount * SliceThickness; ++i)
+        VolumeMask[i] = reorderBuffer[i];
+
+    delete[] reorderBuffer;
 }
