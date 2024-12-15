@@ -31,11 +31,6 @@ include(cmake/StaticAnalysers.cmake)
 file(GLOB CPU CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/DVR_CPU.cpp")
 file(GLOB GPU CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/DVR_GPU.cpp")
 
-#file(GLOB CONSTANTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/Constants.h")
-#file(GLOB APPLICATION CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/Application/Application.h")
-#file(GLOB CAMERA CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/Camera/Camera.h")
-#file(GLOB GAME CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/Game/Game.h")
-
 add_executable(DVR_CPU ${CPU})
 add_executable(DVR_GPU ${GPU})
 

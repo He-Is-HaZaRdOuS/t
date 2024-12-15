@@ -2,9 +2,9 @@
 #ifndef APPLICATION_H
 #define APPLICATION_H
 
-#include "Camera/Camera.h"
-#include "Game/Game.h"
-#include "Constants.h"
+#include "Camera/Camera.hpp"
+#include "Game/Game.hpp"
+#include "Constants.hpp"
 
 #include <imgui.h>
 #include <raylib.h>
@@ -45,10 +45,9 @@ namespace Application {
         font = LoadFont(ASSETS_PATH "ibm-plex-mono-v19-latin-500.ttf");
 
         SetWindowState(FLAG_MSAA_4X_HINT);
-
         InitWindow(static_cast<int>(windowSize.x),
                    static_cast<int>(windowSize.y),
-                   Constants::kTitle.c_str());
+                   "DVR_CPU");
         rlImGuiSetup(true);
 
         gameTexture = LoadRenderTexture((int)windowSize.x, (int)windowSize.y);

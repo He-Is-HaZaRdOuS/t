@@ -1,4 +1,6 @@
-#include "Application/Application.h"
+#include "Application/Application.hpp"
+#include "Camera/Camera.hpp"
+#include "Game/Game.hpp"
 
 int main()
 {

@@ -2,7 +2,7 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#include "Constants.h"
+#include "Constants.hpp"
 
 #include <raylib.h>
 #include <imgui.h>
